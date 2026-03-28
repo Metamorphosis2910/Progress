@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Дерево исследований человечества</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600&display=swap');
+
+  :root {
+    --bg: #030610;
+    --grid: rgba(0,200,255,0.04);
+    --done: #00e5ff;
+    --active: #ffb300;
+    --future: #4a5568;
+    --glow-done: 0 0 20px #00e5ff80, 0 0 40px #00e5ff30;
+    --glow-active: 0 0 20px #ffb30080, 0 0 40px #ffb30030;
+    --panel-bg: rgba(3,6,16,0.96);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    font-family: 'Rajdhani', sans-serif;
+    color: #c8e6f5;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(0,200,255,0.06) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  header {
+    position: relative;
+    z-index: 10;
+    text-align: center;
+    padding: 32px 20px 16px;
+    border-bottom: 1px solid rgba(0,200,255,0.15);
+  }
+
+  header h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(16px, 3.5vw, 28px);
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    color: var(--done);
+    text-shadow: var(--glow-done);
+    text-transform: uppercase;
+  }
+
+  header p {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: rgba(0,200,255,0.5);
+    margin-top: 6px;
+    letter-spacing: 0.2em;
+  }
+
+  .legend {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    padding: 12px 20px;
+    position: relative;
+    z-index: 10;
+    border-bottom: 1px solid rgba(0,200,255,0.08);
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: rgba(200,230,245,0.6);
+  }
+
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .legend-dot.done { background: var(--done); box-shadow: 0 0 8px var(--done); }
+  .legend-dot.active { background: var(--active); box-shadow: 0 0 8px var(--active); }
+  .legend-dot.future { background: var(--future); border: 1px solid #718096; }
+
+  /* MAIN TREE */
+  .tree-container {
+    position: relative;
+    z-index: 10;
+    padding: 40px 20px 120px;
+    overflow-x: auto;
+  }
+
+  .era-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .era {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 0;
+    min-height: 160px;
+  }
+
+  .era-label {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 20px;
+    position: relative;
+  }
+
+  .era-label-text {
+    font-family: 'Orbitron', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(0,200,255,0.3);
+    writing-mode: horizontal-tb;
+    text-align: right;
+    line-height: 1.4;
+  }
+
+  .era-label::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0; bottom: 0;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, rgba(0,200,255,0.2), transparent);
+  }
+
+  .era-nodes {
+    display: flex;
+    align-items: center;
+    padding: 20px 0 20px 40px;
+    gap: 20px;
+    flex-wrap: wrap;
+    position: relative;
+  }
+
+  /* Connector lines */
+  .connector {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    height: 2px;
+    width: 30px;
+    background: linear-gradient(90deg, transparent, rgba(0,200,255,0.3));
+  }
+
+  /* NODE */
+  .node {
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+  }
+
+  .node:hover { transform: translateY(-3px); }
+
+  .node-card {
+    width: 130px;
+    border: 1px solid;
+    border-radius: 4px;
+    padding: 10px 12px;
+    position: relative;
+    transition: all 0.25s ease;
+    backdrop-filter: blur(4px);
+  }
+
+  .node.done .node-card {
+    border-color: rgba(0,229,255,0.4);
+    background: rgba(0,229,255,0.05);
+    box-shadow: var(--glow-done);
+  }
+
+  .node.active .node-card {
+    border-color: rgba(255,179,0,0.6);
+    background: rgba(255,179,0,0.07);
+    box-shadow: var(--glow-active);
+    animation: pulse-active 2s infinite;
+  }
+
+  .node.future .node-card {
+    border-color: rgba(74,85,104,0.5);
+    background: rgba(74,85,104,0.05);
+  }
+
+  @keyframes pulse-active {
+    0%, 100% { box-shadow: 0 0 10px #ffb30040, 0 0 20px #ffb30020; }
+    50% { box-shadow: 0 0 20px #ffb30080, 0 0 40px #ffb30040; }
+  }
+
+  .node-icon {
+    font-size: 20px;
+    margin-bottom: 6px;
+    display: block;
+  }
+
+  .node-name {
+    font-family: 'Orbitron', monospace;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    line-height: 1.3;
+  }
+
+  .node.done .node-name { color: var(--done); }
+  .node.active .node-name { color: var(--active); }
+  .node.future .node-name { color: #718096; }
+
+  .node-sub {
+    font-size: 10px;
+    color: rgba(200,230,245,0.5);
+    margin-top: 3px;
+    font-family: 'Share Tech Mono', monospace;
+    line-height: 1.2;
+  }
+
+  .node.active .node-sub { color: rgba(255,179,0,0.6); }
+
+  .node-status {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--bg);
+  }
+  .node.done .node-status { background: var(--done); }
+  .node.active .node-status { background: var(--active); animation: blink 1s infinite; }
+  .node.future .node-status { background: #4a5568; }
+
+  @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+  /* PANEL */
+  .panel-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    backdrop-filter: blur(4px);
+  }
+
+  .panel-overlay.visible { display: flex; }
+
+  .panel {
+    background: var(--panel-bg);
+    border: 1px solid rgba(0,200,255,0.3);
+    border-radius: 8px;
+    max-width: 560px;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 0 60px rgba(0,200,255,0.1), 0 0 120px rgba(0,0,0,0.8);
+  }
+
+  .panel-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid rgba(0,200,255,0.1);
+    position: sticky;
+    top: 0;
+    background: var(--panel-bg);
+    z-index: 1;
+  }
+
+  .panel-era {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: rgba(0,200,255,0.4);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .panel-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+
+  .panel.done-panel .panel-title { color: var(--done); text-shadow: var(--glow-done); }
+  .panel.active-panel .panel-title { color: var(--active); text-shadow: var(--glow-active); }
+  .panel.future-panel .panel-title { color: #a0aec0; }
+
+  .panel-icon-big { font-size: 32px; margin-bottom: 4px; display: block; }
+
+  .panel-body {
+    padding: 20px 24px 24px;
+  }
+
+  .panel-section {
+    margin-bottom: 18px;
+  }
+
+  .panel-section-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: rgba(0,200,255,0.5);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(0,200,255,0.1);
+  }
+
+  .panel-text {
+    font-size: 14px;
+    line-height: 1.65;
+    color: #b0c8d8;
+  }
+
+  .panel-text strong { color: #e2ecf5; font-weight: 600; }
+
+  .wall {
+    background: rgba(255,179,0,0.08);
+    border: 1px solid rgba(255,179,0,0.3);
+    border-radius: 4px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #ffcc02;
+    line-height: 1.5;
+    margin-top: 8px;
+  }
+
+  .wall::before {
+    content: '⚡ СТЕНА: ';
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--active);
+  }
+
+  .next-tech {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .next-tag {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 2px;
+    background: rgba(0,200,255,0.08);
+    border: 1px solid rgba(0,200,255,0.2);
+    color: var(--done);
+    letter-spacing: 0.1em;
+  }
+
+  .close-btn {
+    position: absolute;
+    top: 14px; right: 16px;
+    background: none;
+    border: 1px solid rgba(0,200,255,0.2);
+    color: rgba(0,200,255,0.5);
+    cursor: pointer;
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    width: 28px; height: 28px;
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .close-btn:hover {
+    border-color: var(--done);
+    color: var(--done);
+    box-shadow: 0 0 10px rgba(0,200,255,0.3);
+  }
+
+  .hint {
+    text-align: center;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: rgba(0,200,255,0.25);
+    letter-spacing: 0.2em;
+    padding: 10px 20px 0;
+    position: relative;
+    z-index: 10;
+  }
+
+  /* Arrow connecting eras */
+  .era-arrow {
+    text-align: left;
+    padding-left: 140px;
+    color: rgba(0,200,255,0.15);
+    font-size: 20px;
+    line-height: 1;
+    margin: -6px 0;
+    position: relative;
+    z-index: 10;
+  }
+
+  @media (max-width: 600px) {
+    .era { grid-template-columns: 80px 1fr; }
+    .era-nodes { padding-left: 20px; gap: 14px; }
+    .node-card { width: 110px; }
+    .era-label-text { font-size: 8px; }
+    header h1 { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🧬 Дерево Исследований Человечества</h1>
+  <p>// TECH TREE STATUS: CURRENT CYCLE — 2026 CE // CLICK NODE TO EXPAND //</p>
+</header>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot done"></div> Завершено</div>
+  <div class="legend-item"><div class="legend-dot active"></div> Активный рубеж</div>
+  <div class="legend-item"><div class="legend-dot future"></div> Будущее</div>
+</div>
+
+<p class="hint">↓ кликни по узлу — читай детали ↓</p>
+
+<div class="tree-container">
+  <div class="era-wrapper" id="treeRoot"></div>
+</div>
+
+<!-- Panel -->
+<div class="panel-overlay" id="panelOverlay">
+  <div class="panel" id="panel">
+    <button class="close-btn" onclick="closePanel()">✕</button>
+    <div class="panel-header">
+      <span class="panel-icon-big" id="pIcon"></span>
+      <div class="panel-era" id="pEra"></div>
+      <div class="panel-title" id="pTitle"></div>
+    </div>
+    <div class="panel-body" id="pBody"></div>
+  </div>
+</div>
+
+<script>
+const data = [
+  {
+    era: "КЛАССИЧЕСКАЯ\nНАУКА",
+    nodes: [
+      {
+        id: "newton", status: "done", icon: "🍎", name: "Механика\n& Гравитация",
+        sub: "17-18 вв",
+        desc: "Ньютон, Лейбниц — рождение классической физики. Математика стала языком природы. Описание движения планет, снарядов, жидкостей.",
+        wall: null,
+        next: ["Термодинамика", "Электромагнетизм"]
+      },
+      {
+        id: "thermo", status: "done", icon: "🔥", name: "Термо-\nдинамика",
+        sub: "19 в.",
+        desc: "Карно, Больцман, Клаузиус. Энтропия, тепловые двигатели. Паровая революция. Понимание необратимости времени.",
+        wall: null,
+        next: ["Статфизика", "Двигатель внутреннего сгорания"]
+      },
+      {
+        id: "em", status: "done", icon: "⚡", name: "Электро-\nмагнетизм",
+        sub: "19 в.",
+        desc: "Максвелл объединил электричество, магнетизм и свет в четырёх уравнениях. Радио, телеграф, электромоторы. Фундамент всей современной техники.",
+        wall: null,
+        next: ["Квантовая механика", "Спецтеория относительности"]
+      }
+    ]
+  },
+  {
+    era: "РЕВОЛЮЦИЯ\n20-ГО ВЕКА",
+    nodes: [
+      {
+        id: "qm", status: "done", icon: "🌀", name: "Квантовая\nмеханика",
+        sub: "1900–1935",
+        desc: "<strong>Планк, Бор, Гейзенберг, Дирак, Шрёдингер.</strong> Мир на малых масштабах работает по совершенно другим правилам. Вероятность вместо траекторий, суперпозиция, запутанность. На основе QM — весь современный кремний: транзисторы, процессоры, лазеры.",
+        wall: null,
+        next: ["Квантовая теория поля", "Полупроводники"]
+      },
+      {
+        id: "rel", status: "done", icon: "🌌", name: "Теория\nотносит.",
+        sub: "1905–1915",
+        desc: "<strong>Эйнштейн.</strong> СТО: пространство и время едины, E=mc². ОТО: масса искривляет пространство-время — это и есть гравитация. GPS без ОТО давал бы ошибку ~10 км в сутки.",
+        wall: null,
+        next: ["Космология", "Детекторы гравволн"]
+      },
+      {
+        id: "dna", status: "done", icon: "🧬", name: "Структура\nДНК",
+        sub: "1953",
+        desc: "<strong>Уотсон & Крик</strong> (на данных Франклин). Двойная спираль — код жизни расшифрован. Открытие запустило молекулярную биологию. Через 50 лет — геном человека, CRISPR, синтетическая биология.",
+        wall: null,
+        next: ["Геномика", "CRISPR"]
+      }
+    ]
+  },
+  {
+    era: "СТАНДАРТНАЯ\nМОДЕЛЬ",
+    nodes: [
+      {
+        id: "sm", status: "done", icon: "⚛️", name: "Стандартная\nМодель",
+        sub: "1960-е–1970-е",
+        desc: "Квантовая теория поля во всей красе. 17 частиц, три фундаментальных взаимодействия (электрослабое + сильное). Хиггс-бозон подтверждён в 2012. <strong>Самая точная теория в истории науки</strong> — расхождение с экспериментом: 0.0000000002%.",
+        wall: "Не включает гравитацию. Не объясняет тёмную материю, материю/антиматерию асимметрию, нейтринные массы. Это главный нерешённый вопрос физики.",
+        next: ["Физика за пределами СМ", "Квантовая гравитация"]
+      },
+      {
+        id: "cosmo", status: "done", icon: "🌠", name: "Космология\nБольшого Взрыва",
+        sub: "1960-е–2000-е",
+        desc: "COBE, WMAP, Planck — карты реликтового излучения. Возраст вселенной: 13,8 млрд лет. Открытие тёмной энергии (1998, ускоренное расширение). Инфляционная теория.",
+        wall: "Тёмная материя (27%) и тёмная энергия (68%) — наблюдаем косвенно, природа неизвестна.",
+        next: ["Гравитационно-волновая астрономия", "Телескопы нового поколения"]
+      }
+    ]
+  },
+  {
+    era: "ЦИФРОВАЯ\nРЕВОЛЮЦИЯ",
+    nodes: [
+      {
+        id: "comp", status: "done", icon: "💾", name: "Кремниевые\nвычисления",
+        sub: "1947–2000-е",
+        desc: "Транзистор (1947) → ИС → микропроцессор → ПК → интернет. Закон Мура работал 50 лет: удвоение каждые ~18 мес. Сейчас <strong>достигает физических пределов</strong> (3–2 нм — почти атомный масштаб).",
+        wall: "Закон Мура замедляется. Квантовые туннельные эффекты мешают уменьшению транзисторов дальше ~1 нм.",
+        next: ["Нейроморфные чипы", "Квантовые компьютеры", "Фотонные чипы"]
+      },
+      {
+        id: "ai", status: "done", icon: "🤖", name: "Глубокое\nобучение",
+        sub: "2012–2024",
+        desc: "AlexNet (2012) → трансформеры (2017) → GPT-4/Claude (2023). ИИ превзошёл человека в распознавании образов, игре в го, синтезе белков. <strong>Сейчас — активный рубеж</strong>: AGI-дискуссия, scaling laws, мультимодальность.",
+        wall: "Нет объяснимости. Галлюцинации. Неизвестно, масштабируется ли текущий подход до AGI или нужен архитектурный прорыв.",
+        next: ["AGI", "ИИ-агенты", "Нейроморфный ИИ"]
+      }
+    ]
+  },
+  {
+    era: "АКТИВНЫЙ\nРУБЕЖ",
+    nodes: [
+      {
+        id: "qcomp", status: "active", icon: "🔮", name: "Квантовые\nкомпьютеры",
+        sub: "~2019–???",
+        desc: "<strong>Google, IBM, IonQ, Quantinuum.</strong> Квантовое превосходство показано на узких задачах. Но: 1000+ физических кубитов для 1 логического (из-за ошибок). <strong>Fault-tolerant quantum computer</strong> — ещё 5–15 лет.",
+        wall: "Декогеренция — кубиты теряют квантовое состояние за микросекунды. Нужно охлаждение до -273°C. Масштабирование крайне сложно.",
+        next: ["Взлом RSA-2048", "Квантовая химия", "Оптимизация логистики"]
+      },
+      {
+        id: "bio", status: "active", icon: "✂️", name: "CRISPR &\nСинтбио",
+        sub: "2012–...",
+        desc: "<strong>Дудна & Шарпентье</strong> (Нобель 2020). Точечная правка генома. Уже лечат серповидноклеточную анемию. In vivo редактирование у людей идёт. <strong>Синтетическая биология</strong>: программируем бактерии на синтез топлива, лекарств, материалов.",
+        wall: "Off-target мутации, иммунный ответ на доставку, этика зародышевого редактирования. Регуляция отстаёт.",
+        next: ["Генная терапия рака", "Программируемые вакцины", "Биокомпьютеры"]
+      },
+      {
+        id: "neuro", status: "active", icon: "🧠", name: "Нейро-\nинтерфейсы",
+        sub: "2020-е",
+        desc: "<strong>Neuralink, Synchron, BrainGate.</strong> BCI уже позволяет парализованным пациентам управлять курсором мыслью. Neuralink первый имплант человеку — 2024. Чтение нейрональных паттернов в реальном времени.",
+        wall: "Инвазивность, биосовместимость (рубцевание вокруг электродов), пропускная способность (1000 нейронов из 86 млрд), расшифровка семантики мысли.",
+        next: ["Мозг-компьютер симбиоз", "Нейропротезирование", "Память как файл"]
+      },
+      {
+        id: "fusion", status: "active", icon: "☀️", name: "Термо-\nядерный синтез",
+        sub: "2022–...",
+        desc: "<strong>NIF (декабрь 2022)</strong> — первый раз получили больше энергии, чем вложили в мишень. ITER строится (2025–2035). <strong>Частные компании</strong>: Commonwealth Fusion, Helion — обещают реакторы к 2030–2035.",
+        wall: "Q-factor = 1.5 пока только для мишени, не всей установки. Нужен Q > 10 для коммерческого смысла. Материалы, удерживающие плазму 100 млн °C.",
+        next: ["Неограниченная чистая энергия", "Межзвёздные зонды"]
+      },
+      {
+        id: "gw", status: "active", icon: "〰️", name: "Гравит.\nволны",
+        sub: "2015–...",
+        desc: "<strong>LIGO/Virgo</strong> — первое обнаружение 2015 (GW150914, слияние ЧД). Открыта гравитационно-волновая астрономия. Уже зафиксированы десятки событий: ЧД+ЧД, нейтронная+нейтронная. Мультимессенджерная астрономия.",
+        wall: "Чувствительность ограничена сейсмическим шумом и квантовыми флуктуациями зеркал. Следующий шаг — космический детектор LISA (запуск ~2037).",
+        next: ["LISA", "Наблюдение Большого Взрыва напрямую"]
+      }
+    ]
+  },
+  {
+    era: "БЛИЖНИЙ\nГОРИЗОНТ",
+    nodes: [
+      {
+        id: "agi", status: "future", icon: "🌐", name: "AGI /\nАвтономный ИИ",
+        sub: "2025–2035?",
+        desc: "Искусственный интеллект общего назначения — система, решающая произвольные задачи на уровне или выше человека. Возможно, ИИ-агенты, способные вести научные исследования самостоятельно.",
+        wall: "Никто не знает, что нужно: просто больше данных/вычислений, или принципиально новая архитектура (причинность, символьные рассуждения).",
+        next: ["Автоматическое научное открытие", "Рекурсивное самосовершенствование ИИ"]
+      },
+      {
+        id: "longevity", status: "future", icon: "⏳", name: "Замедление\nстарения",
+        sub: "2030–2050?",
+        desc: "Senolytic терапии (уничтожение стареющих клеток), перепрограммирование клеток (Яманака-факторы), NMN/NR, теломеразная активация. Мыши с обратимым старением уже есть. Первые клинические трайлы у людей — 2024–2025.",
+        wall: "Старение — комплексный процесс (9+ hallmarks). Риск онкологии при «омоложении». Регуляторные барьеры.",
+        next: ["Радикальное продление жизни", "Клеточное перепрограммирование in vivo"]
+      },
+      {
+        id: "mat", status: "future", icon: "🔬", name: "Метаматериалы\n& Нанотех",
+        sub: "2020-е–2040-е",
+        desc: "Материалы со свойствами, недостижимыми в природе: отрицательный показатель преломления, идеальный проводник при комнатной t°. Углеродные нанотрубки, атомарно-тонкие слои (графен, бориды).",
+        wall: "Производство в масштабе. Дефекты в нанострукурах. Стоимость синтеза.",
+        next: ["Космический лифт", "Нейронные чипы следующего поколения"]
+      }
+    ]
+  },
+  {
+    era: "ДАЛЬНИЙ\nГОРИЗОНТ",
+    nodes: [
+      {
+        id: "qg", status: "future", icon: "🕳️", name: "Квантовая\nгравитация",
+        sub: "???",
+        desc: "Объединение ОТО и квантовой механики. Петлевая квантовая гравитация, теория струн, твистор-теория. Чёрные дыры, планковский масштаб (10⁻³⁵ м), природа пространства-времени.",
+        wall: "Нет экспериментальной проверки — планковские энергии в 10¹⁵ раз выше возможностей LHC. Возможно, проверить никогда не удастся напрямую.",
+        next: ["ТОЕ (Theory of Everything)", "Управление пространством-временем?"]
+      },
+      {
+        id: "dm", status: "future", icon: "🌑", name: "Тёмная\nматерия",
+        sub: "???",
+        desc: "27% вселенной. Наблюдаем только гравитационный эффект. Кандидаты: WIMP, аксионы, стерильные нейтрино, примордиальные ЧД. Десятки детекторов — пока тишина.",
+        wall: "40+ лет поисков без прямого обнаружения. Возможно, частица не из Стандартной Модели или вообще новый тип материи.",
+        next: ["Новая физика за СМ", "Прямое обнаружение WIMP/аксионов"]
+      },
+      {
+        id: "bci_adv", status: "future", icon: "🦾", name: "Когнитивное\nусиление",
+        sub: "2040–?",
+        desc: "Симбиоз мозга и ИИ. Расширение памяти, скорости мышления, прямая коммуникация мозг-мозг. Загрузка навыков. Граница между человеком и машиной размывается.",
+        wall: "Биосовместимость, пропускная способность нейрон↔️чип, этика идентичности, приватность мыслей, неравенство доступа.",
+        next: ["Постбиологический человек", "Коллективный разум"]
+      },
+      {
+        id: "star", status: "future", icon: "🚀", name: "Межзвёздные\nперелёты",
+        sub: "22-й век?",
+        desc: "Ближайшая звезда — 4,2 св. года. При 10% скорости света — 42 года. Технологии: лазерный парус (Breakthrough Starshot), антиматерийный двигатель, поколенческие корабли.",
+        wall: "Энергия для разгона до 10% c — астрономическая. Радиационная защита. Микропыль на скорости 0.1c имеет энергию ядерного взрыва.",
+        next: ["Тип I цивилизации по Кардашёву", "Колонизация экзопланет"]
+      }
+    ]
+  }
+];
+
+function buildTree() {
+  const root = document.getElementById('treeRoot');
+  data.forEach((era, i) => {
+    if (i > 0) {
+      const arrow = document.createElement('div');
+      arrow.className = 'era-arrow';
+      arrow.innerHTML = '▾';
+      root.appendChild(arrow);
+    }
+    const eraDiv = document.createElement('div');
+    eraDiv.className = 'era';
+
+    // Label
+    const labelDiv = document.createElement('div');
+    labelDiv.className = 'era-label';
+    const labelText = document.createElement('div');
+    labelText.className = 'era-label-text';
+    labelText.textContent = era.era;
+    labelDiv.appendChild(labelText);
+    eraDiv.appendChild(labelDiv);
+
+    // Nodes
+    const nodesDiv = document.createElement('div');
+    nodesDiv.className = 'era-nodes';
+
+    const connector = document.createElement('div');
+    connector.className = 'connector';
+    nodesDiv.appendChild(connector);
+
+    era.nodes.forEach(node => {
+      const nodeEl = document.createElement('div');
+      nodeEl.className = `node ${node.status}`;
+      nodeEl.innerHTML = `
+        <div class="node-card">
+          <div class="node-status"></div>
+          <span class="node-icon">${node.icon}</span>
+          <div class="node-name">${node.name}</div>
+          <div class="node-sub">${node.sub}</div>
+        </div>
+      `;
+      nodeEl.addEventListener('click', () => openPanel(node, era.era));
+      nodesDiv.appendChild(nodeEl);
+    });
+
+    eraDiv.appendChild(nodesDiv);
+    root.appendChild(eraDiv);
+  });
+}
+
+function openPanel(node, era) {
+  const overlay = document.getElementById('panelOverlay');
+  const panel = document.getElementById('panel');
+  const pIcon = document.getElementById('pIcon');
+  const pEra = document.getElementById('pEra');
+  const pTitle = document.getElementById('pTitle');
+  const pBody = document.getElementById('pBody');
+
+  panel.className = 'panel ' + node.status + '-panel';
+  pIcon.textContent = node.icon;
+  pEra.textContent = era.replace('\n', ' · ');
+  pTitle.textContent = node.name.replace('\n', ' ');
+
+  let html = '';
+
+  html += `<div class="panel-section">
+    <div class="panel-section-title">// Описание</div>
+    <div class="panel-text">${node.desc}</div>
+  </div>`;
+
+  if (node.wall) {
+    html += `<div class="panel-section">
+      <div class="panel-section-title">// Проблема</div>
+      <div class="wall">${node.wall}</div>
+    </div>`;
+  }
+
+  if (node.next && node.next.length) {
+    html += `<div class="panel-section">
+      <div class="panel-section-title">// Следующие технологии</div>
+      <div class="next-tech">${node.next.map(n => `<span class="next-tag">→ ${n}</span>`).join('')}</div>
+    </div>`;
+  }
+
+  pBody.innerHTML = html;
+  overlay.classList.add('visible');
+  document.body.style.overflow = 'hidden';
+}
+
+function closePanel() {
+  document.getElementById('panelOverlay').classList.remove('visible');
+  document.body.style.overflow = '';
+}
+
+document.getElementById('panelOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closePanel();
+});
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+
+buildTree();
+</script>
+</body>
+</html>
